@@ -1,0 +1,56 @@
+{
+  "app": {
+    "rootPath": "D:\\\\Projects\\go-diploma\\",
+    "martPath": "cmd/gophermart/go_build_main.exe",
+    "accrualPath": "cmd/accrual/accrual_windows_amd64.exe",
+    "migrationsPath": "server/storage/migrations"
+  },
+  "test": {
+    "db": "postgres://postgres:12345@localhost:5432/postgres?sslmode=disable",
+    "martAddress": "http://localhost:8080/",
+    "accrualAddress": "http://localhost:8081/"
+  },
+  "accrual": {
+    "orders": [
+      {
+        "order": "",
+        "goods": [
+          {
+            "description": "",
+            "price": 1000
+          },
+          {
+            "description": "",
+            "price": 1000
+          }
+        ]
+      },
+      {
+        "order": "",
+        "goods": [
+          {
+            "description": "",
+            "price": 1000
+          },
+          {
+            "description": "",
+            "price": 1000
+          }
+        ]
+      },
+      {
+        "order": "",
+        "goods": [
+          {
+            "description": "",
+            "price": 1000
+          },
+          {
+            "description": "",
+            "price": 1000
+          }
+        ]
+      }
+    ]
+  }
+}

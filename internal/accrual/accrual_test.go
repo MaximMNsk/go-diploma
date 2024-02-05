@@ -3,12 +3,28 @@ package accrual
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go-diploma/server/config"
+	"path/filepath"
 	"testing"
 )
 
+var Conf config.Config
+var Acc Accrual
+
+func TestMain(m *testing.M) {
+	_ = Conf.Init()
+	_ = Acc.Init(Conf.LocalConfig.Test.AccrualAddress, Conf.LocalConfig.Test.Db, filepath.Join(Conf.LocalConfig.App.RootPath+Conf.LocalConfig.App.AccrualPath))
+	_ = Acc.Start()
+	defer Acc.Stop()
+}
+
+func before() {}
+
 func TestAccrual_SetNewAccrualType(t *testing.T) {
+	_ = Conf.Init()
+	Conf.Get()
+
 	type args struct {
-		address string
 		accType newAccrualType
 	}
 
@@ -19,7 +35,6 @@ func TestAccrual_SetNewAccrualType(t *testing.T) {
 		{
 			name: `Test set new accrual type`,
 			arguments: args{
-				address: `http://localhost:8081/`,
 				accType: newAccrualType{
 					Match:      `test`,
 					Reward:     5,
@@ -31,20 +46,17 @@ func TestAccrual_SetNewAccrualType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var acc Accrual
-			err := acc.New(tt.arguments.address)
-			require.NoError(t, err)
-
-			err = acc.SetNewAccrualType(tt.arguments.accType)
+			err := Acc.SetNewAccrualType(tt.arguments.accType)
 			require.NoError(t, err)
 		})
 	}
 }
 
 func TestAccrual_SetOrderInfo(t *testing.T) {
+	Conf.Get()
+
 	type args struct {
-		address string
-		order   SetOrderData
+		order SetOrderData
 	}
 
 	tests := []struct {
@@ -54,7 +66,6 @@ func TestAccrual_SetOrderInfo(t *testing.T) {
 		{
 			name: `Test set order accrual`,
 			arguments: args{
-				address: `http://localhost:8081/`,
 				order: SetOrderData{
 					OrderNum: "4561261212345467",
 					Goods: []Good{
@@ -74,19 +85,16 @@ func TestAccrual_SetOrderInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var acc Accrual
-			err := acc.New(tt.arguments.address)
-			require.NoError(t, err)
-
-			err = acc.SetOrderInfo(tt.arguments.order)
+			err := Acc.SetOrderInfo(tt.arguments.order)
 			require.NoError(t, err)
 		})
 	}
 }
 
 func TestAccrual_GetOrderInfo(t *testing.T) {
+	Conf.Get()
+
 	type args struct {
-		address  string
 		orderNum string
 	}
 	type want GetOrderData
@@ -99,7 +107,6 @@ func TestAccrual_GetOrderInfo(t *testing.T) {
 		{
 			name: `Test get order accrual: no orders`,
 			arguments: args{
-				address:  `http://localhost:8081/`,
 				orderNum: "0",
 			},
 			wanted: want{
@@ -110,7 +117,6 @@ func TestAccrual_GetOrderInfo(t *testing.T) {
 		{
 			name: `Test get order accrual`,
 			arguments: args{
-				address:  `http://localhost:8081/`,
 				orderNum: "4561261212345467",
 			},
 			wanted: want{
@@ -122,11 +128,7 @@ func TestAccrual_GetOrderInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var acc Accrual
-			err := acc.New(tt.arguments.address)
-			require.NoError(t, err)
-
-			_, err = acc.GetOrderInfo(tt.wanted.OrderNum)
+			_, err := Acc.GetOrderInfo(tt.wanted.OrderNum)
 			if tt.name == `Test get order accrual: no orders` {
 				assert.Error(t, err)
 			}

@@ -1,9 +1,12 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"github.com/caarlos0/env/v6"
+	"os"
 )
 
 type Config struct {
@@ -12,16 +15,39 @@ type Config struct {
 	DatabaseConnection string `env:"DATABASE_URI"`
 	MartAddress        string `env:"RUN_ADDRESS"`
 	AccrualAddress     string `env:"ACCRUAL_SYSTEM_ADDRESS"`
+	LocalConfig        LocalCfg
+}
+
+type LocalCfg struct {
+	App struct {
+		RootPath       string `json:"rootPath"`
+		MartPath       string `json:"martPath"`
+		AccrualPath    string `json:"accrualPath"`
+		MigrationsPath string `json:"migrationsPath"`
+	} `json:"app"`
+	Logger struct {
+	} `json:"logger"`
+	Test struct {
+		Db             string `json:"db"`
+		MartAddress    string `json:"martAddress"`
+		AccrualAddress string `json:"accrualAddress"`
+	} `json:"test"`
 }
 
 const layer = `server`
+
+var (
+	ErrEnv           = errors.New(`config env error`)
+	ErrFile          = errors.New(`config file error`)
+	ErrConfigConsist = errors.New(`not all params filled for start app`)
+)
 
 // Init Заполняет данными
 // структуру конфигурации
 func (c *Config) Init() error {
 	envErr := env.Parse(c)
 	if envErr != nil {
-		return envErr
+		return fmt.Errorf(envErr.Error()+` : %w`, ErrEnv)
 	}
 
 	flag.StringVar(&c.MartAddress, "a", "", "address and port to run server mart")
@@ -31,8 +57,19 @@ func (c *Config) Init() error {
 	flag.StringVar(&c.Command, "command", "start", "action command start/stop, default start")
 	flag.Parse()
 
+	fileConfig, errFile := os.Open(`../../server/config/config.json`)
+	defer fileConfig.Close()
+	if errFile != nil {
+		return fmt.Errorf(errFile.Error()+` : %w`, ErrFile)
+	}
+	decoder := json.NewDecoder(fileConfig)
+	errDecode := decoder.Decode(&c.LocalConfig)
+	if errDecode != nil {
+		return fmt.Errorf(errDecode.Error()+` : %w`, ErrFile)
+	}
+
 	if c.DatabaseConnection == `` || c.MartAddress == `` || c.AccrualAddress == `` {
-		return errors.New(`empty params`)
+		return ErrConfigConsist
 	}
 
 	return nil

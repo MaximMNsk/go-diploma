@@ -1,0 +1,6 @@
+BEGIN TRANSACTION;
+
+DROP INDEX IF EXISTS unique_login;
+DROP TABLE IF EXISTS public.users;
+
+COMMIT ;

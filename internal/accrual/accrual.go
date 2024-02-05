@@ -7,28 +7,78 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"strconv"
+	"syscall"
 )
 
 type Accrual struct {
-	address string
+	Address string
+	DSN     string
+	BinPath string
+	Pid     int
 }
 
-func IsUrl(str string) bool {
+var ErrEmptyAddr = errors.New(`host or port not found`)
+
+func ValidateUrl(str string) (string, error) {
+	if str[0:4] != `http` {
+		str = `http://` + str
+	}
 	u, err := url.Parse(str)
-	return err == nil && u.Scheme != "" && u.Host != "" && u.Port() != ""
+	if err != nil {
+		return str, err
+	}
+	if u.Host == `` {
+		return u.Host, ErrEmptyAddr
+	}
+	return u.Host, nil
 }
 
 /**
  * Создаем объект для работы с accrual
  */
 
-func (a *Accrual) New(address string) error {
-	if !IsUrl(address) {
+func (a *Accrual) Init(address string, dsn string, binPath string) error {
+	var err error
+	a.Address, err = ValidateUrl(address)
+	a.DSN = dsn
+	a.BinPath = binPath
+	if err != nil {
 		return errors.New(`address is not valid`)
 	}
-	a.address = address
 	return nil
+}
+
+func (a *Accrual) Start() error {
+	cmd := exec.Command(
+		a.BinPath,
+		`-a`, a.Address,
+		`-d`, a.DSN,
+	)
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	a.Pid = cmd.Process.Pid
+
+	return nil
+}
+func (a *Accrual) Stop() error {
+	p, err := os.FindProcess(a.Pid)
+	if err != nil {
+		return err
+	}
+	err = p.Signal(syscall.SIGKILL)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func AccrualDaemon(stop chan struct{}) {
+
 }
 
 /**
@@ -42,7 +92,7 @@ type GetOrderData struct {
 }
 
 func (a *Accrual) GetOrderInfo(orderNum string) (GetOrderData, error) {
-	accrualUrl := a.address + `api/orders/` + orderNum
+	accrualUrl := `http://` + a.Address + `/api/orders/` + orderNum
 	request, err := http.NewRequest("GET", accrualUrl, nil)
 	if err != nil {
 		return GetOrderData{}, err
@@ -91,7 +141,7 @@ func (a *Accrual) SetOrderInfo(data SetOrderData) error {
 		return err
 	}
 
-	accrualUrl := a.address + `api/orders`
+	accrualUrl := `http://` + a.Address + `/api/orders`
 	request, err := http.NewRequest("POST", accrualUrl, bytes.NewBuffer(marshaledOrder))
 	if err != nil {
 		return err
@@ -126,7 +176,7 @@ func (a *Accrual) SetNewAccrualType(data newAccrualType) error {
 		return err
 	}
 
-	accrualUrl := a.address + `api/goods`
+	accrualUrl := `http://` + a.Address + `/api/goods`
 	request, err := http.NewRequest("POST", accrualUrl, bytes.NewBuffer(marshaledAccType))
 	if err != nil {
 		return err

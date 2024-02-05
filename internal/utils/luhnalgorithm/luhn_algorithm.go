@@ -1,22 +1,30 @@
 // Package luhnalgorithm is an implementation of Luhn Algorithm, also known as the Modulus 10
 package luhnalgorithm
 
-import "strconv"
+import (
+	"errors"
+	"strconv"
+)
 
 // IsLuhnValid validates a number according to the Luhn formula
-func IsLuhnValid(value []int) bool {
+func IsLuhnValid(value string) (bool, error) {
+	var err error
+	var valueSlice []int
 
-	// The formula verifies a number against its included check digit,
-	// which is usually appended to a partial account number to generate the full account number.
-	// This number must pass the following test:
-	// * From the rightmost digit, which is the check digit, moving left,
-	// double the value of every second digit;
-	// if the product of this doubling operation is greater than 9 (e.g., 8 × 2 = 16),
-	// then sum the digits of the products (e.g., 16: 1 + 6 = 7, 18: 1 + 8 = 9).
-	// * Take the sum of all the digits.
-	// * If the total modulo 10 is equal to 0 (if the total ends in zero) then the number is valid according to the Luhn formula; else it is not valid.
-	sum := computeCheckSum(value)
-	return sum%10 == 0
+	if len(value) < 2 {
+		return false, errors.New(`value too small`)
+	}
+
+	for i := 0; i < len(value); i++ {
+		digit, err := strconv.Atoi(value[i : i+1])
+		if err != nil {
+			return false, err
+		}
+		valueSlice = append(valueSlice, digit)
+	}
+
+	sum := computeCheckSum(valueSlice)
+	return sum%10 == 0, err
 }
 
 // Luhn calculate the Luhn Algorithm check digit for a slice ([]int)
@@ -61,13 +69,13 @@ func computeCheckSum(data []int) int {
 	return sum
 }
 
+// The computeCheckDigit check digit is obtained by computing the sum of the other digits
+// then subtracting the units digit from 10. In algorithm form:
+// * Compute the sum of the digits (e.g., 67).
+// * Take the units digit (7).
+// * Subtract the units digit from 10. (10 - 7 = 3)
+// The result (3) is the check digit. In case the sum of digits ends in 0, 0 is the check digit.
 func computeCheckDigit(sum int) int {
-	// The check digit is obtained by computing the sum of the other digits
-	// then subtracting the units digit from 10. In algorithm form:
-	// * Compute the sum of the digits (e.g., 67).
-	// * Take the units digit (7).
-	// * Subtract the units digit from 10. (10 - 7 = 3)
-	// The result (3) is the check digit. In case the sum of digits ends in 0, 0 is the check digit.
 	unitDigit := sum % 10
 	return 10 - unitDigit
 }

@@ -3,9 +3,9 @@ package main
 import (
 	_ "context"
 	"errors"
-	serverLayerConfig "go-diploma/server/config"
+	conf "go-diploma/server/config"
 	"go-diploma/server/logger"
-	serverLayerServer "go-diploma/server/server"
+	serv "go-diploma/server/server"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	var config serverLayerConfig.Config
+	var config conf.Config
 	args := os.Args
 	log := logger.CreateLogger()
 
@@ -66,14 +66,7 @@ func main() {
 
 	log.Info(`Starting app`)
 
-	log.Info(`Init and start accrual`)
-	err = startAccrual()
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	var server serverLayerServer.Server
+	var server serv.Server
 	log.Info(`Init server`)
 	err = server.New(config, log)
 	if err != nil {
@@ -91,12 +84,7 @@ func main() {
 	}
 }
 
-func startAccrual() error {
-	//fmt.Println(`Accrual started`)
-	return nil
-}
-
-func gracefulShutdown(c serverLayerConfig.Config, l *zap.Logger) bool {
+func gracefulShutdown(c conf.Config, l *zap.Logger) bool {
 	shutdownUrl := `http://` + c.MartAddress + `/app/shutdown`
 	l.Info(`Shutdown by: ` + shutdownUrl)
 	request, err := http.NewRequest("POST", shutdownUrl, nil)

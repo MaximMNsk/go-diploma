@@ -15,7 +15,7 @@ func CreateLogger() *zap.Logger {
 		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
 		Development:       true,
 		DisableCaller:     false,
-		DisableStacktrace: false,
+		DisableStacktrace: true,
 		Sampling:          nil,
 		Encoding:          "console",
 		EncoderConfig:     encoderCfg,
