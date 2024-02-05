@@ -20,11 +20,13 @@ type Accrual struct {
 	Pid     int
 }
 
+const webScheme = `http://`
+
 var ErrEmptyAddr = errors.New(`host or port not found`)
 
-func ValidateUrl(str string) (string, error) {
+func ValidateURL(str string) (string, error) {
 	if str[0:4] != `http` {
-		str = `http://` + str
+		str = webScheme + str
 	}
 	u, err := url.Parse(str)
 	if err != nil {
@@ -37,12 +39,12 @@ func ValidateUrl(str string) (string, error) {
 }
 
 /**
- * Создаем объект для работы с accrual
+ * Создаем объект для работы с accrual.
  */
 
 func (a *Accrual) Init(address string, dsn string, binPath string) error {
 	var err error
-	a.Address, err = ValidateUrl(address)
+	a.Address, err = ValidateURL(address)
 	a.DSN = dsn
 	a.BinPath = binPath
 	if err != nil {
@@ -82,7 +84,7 @@ func AccrualDaemon(stop chan struct{}) {
 }
 
 /**
- * Получаем инфо по заказу по его ID
+ * Получаем инфо по заказу по его ID.
  */
 
 type GetOrderData struct {
@@ -92,7 +94,7 @@ type GetOrderData struct {
 }
 
 func (a *Accrual) GetOrderInfo(orderNum string) (GetOrderData, error) {
-	accrualUrl := `http://` + a.Address + `/api/orders/` + orderNum
+	accrualUrl := webScheme + a.Address + `/api/orders/` + orderNum
 	request, err := http.NewRequest("GET", accrualUrl, nil)
 	if err != nil {
 		return GetOrderData{}, err
@@ -141,7 +143,7 @@ func (a *Accrual) SetOrderInfo(data SetOrderData) error {
 		return err
 	}
 
-	accrualUrl := `http://` + a.Address + `/api/orders`
+	accrualUrl := webScheme + a.Address + `/api/orders`
 	request, err := http.NewRequest("POST", accrualUrl, bytes.NewBuffer(marshaledOrder))
 	if err != nil {
 		return err
@@ -176,7 +178,7 @@ func (a *Accrual) SetNewAccrualType(data newAccrualType) error {
 		return err
 	}
 
-	accrualUrl := `http://` + a.Address + `/api/goods`
+	accrualUrl := webScheme + a.Address + `/api/goods`
 	request, err := http.NewRequest("POST", accrualUrl, bytes.NewBuffer(marshaledAccType))
 	if err != nil {
 		return err

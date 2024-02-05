@@ -29,7 +29,10 @@ func main() {
 
 	if config.Command == `stop` {
 		log.Info(`Command stop received. Shutting down server`)
-		gracefulShutdown(config, log)
+		stopped := gracefulShutdown(config, log)
+		if !stopped {
+			log.Error(`do not stop`)
+		}
 		return
 	}
 
@@ -40,7 +43,10 @@ func main() {
 			select {
 			case <-exit:
 				log.Info(`Signal received. Shutting down server`)
-				gracefulShutdown(config, log)
+				stopped := gracefulShutdown(config, log)
+				if !stopped {
+					log.Error(`do not stop`)
+				}
 				time.Sleep(2 * time.Second)
 				return
 			case <-time.After(1 * time.Second):
@@ -85,9 +91,9 @@ func main() {
 }
 
 func gracefulShutdown(c conf.Config, l *zap.Logger) bool {
-	shutdownUrl := `http://` + c.MartAddress + `/app/shutdown`
-	l.Info(`Shutdown by: ` + shutdownUrl)
-	request, err := http.NewRequest("POST", shutdownUrl, nil)
+	shutdownURL := `http://` + c.MartAddress + `/app/shutdown`
+	l.Info(`Shutdown by: ` + shutdownURL)
+	request, err := http.NewRequest(http.MethodPost, shutdownURL, nil)
 	if err != nil {
 		l.Error(err.Error())
 	}
