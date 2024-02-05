@@ -84,7 +84,8 @@ func (s *Server) Start() error {
 
 func (s *Server) Stop() error {
 	var err error
-	shutdownCtx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	err = s.Http.Shutdown(shutdownCtx)
 	err = s.Accrual.Stop()
 	s.DB.Close()

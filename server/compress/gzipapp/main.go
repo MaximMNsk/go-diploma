@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const headerContentEnc = `Content-Encoding`
+
 type compressWriter struct {
 	w  http.ResponseWriter
 	zw *gzip.Writer
@@ -24,18 +26,26 @@ func (c *compressWriter) Header() http.Header {
 }
 
 func (c *compressWriter) Write(p []byte) (int, error) {
-	return c.zw.Write(p)
+	write, err := c.zw.Write(p)
+	if err != nil {
+		return 0, err
+	}
+	return write, nil
 }
 
 func (c *compressWriter) WriteHeader(statusCode int) {
-	if statusCode < 300 {
-		c.w.Header().Set("Content-Encoding", "gzip")
+	if statusCode < http.StatusMultipleChoices {
+		c.w.Header().Set(headerContentEnc, "gzip")
 	}
 	c.w.WriteHeader(statusCode)
 }
 
 func (c *compressWriter) Close() error {
-	return c.zw.Close()
+	err := c.zw.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type compressReader struct {
@@ -69,7 +79,7 @@ func (c *compressReader) Close() error {
 func GzipHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !strings.Contains(r.Header.Get(headerContentEnc), "gzip") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -86,7 +96,7 @@ func GzipHandler(next http.Handler) http.Handler {
 		if supportsGzip {
 			// оборачиваем оригинальный http.ResponseWriter новым с поддержкой сжатия
 			cw := newCompressWriter(w)
-			cw.Header().Set("Content-Encoding", "gzip")
+			cw.Header().Set(headerContentEnc, "gzip")
 			// меняем оригинальный http.ResponseWriter на новый
 			ow = cw
 			// не забываем отправить клиенту все сжатые данные после завершения middleware
@@ -94,7 +104,7 @@ func GzipHandler(next http.Handler) http.Handler {
 		}
 
 		// проверяем, что клиент отправил серверу сжатые данные в формате gzip
-		contentEncoding := r.Header.Get("Content-Encoding")
+		contentEncoding := r.Header.Get(headerContentEnc)
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
 		if sendsGzip {
 			// оборачиваем тело запроса в io.Reader с поддержкой декомпрессии

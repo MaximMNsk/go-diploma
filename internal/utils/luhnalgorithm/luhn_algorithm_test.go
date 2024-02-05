@@ -3,16 +3,18 @@ package luhnalgorithm
 import "testing"
 
 func TestIsLuhnValid(t *testing.T) {
-	data := []int{7, 9, 9, 2, 7, 3, 9, 8, 7, 1, 3}
-	got := IsLuhnValid(data)
+	//data := []int{7, 9, 9, 2, 7, 3, 9, 8, 7, 1, 3}
+	data := "79927398713"
+	got, _ := IsLuhnValid(data)
 	if !got {
 		t.Errorf("Expected '%v' is Luhn valid", data)
 	}
 }
 
 func TestLuhnInvalid(t *testing.T) {
-	data := []int{7, 9, 9, 2, 7, 3, 9, 8, 7, 1}
-	got := IsLuhnValid(data)
+	//data := []int{7, 9, 9, 2, 7, 3, 9, 8, 7, 1}
+	data := "79927398711"
+	got, _ := IsLuhnValid(data)
 	if got {
 		t.Errorf("Expected '%v' is not Luhn valid", data)
 	}
