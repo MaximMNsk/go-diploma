@@ -28,7 +28,7 @@ type LocalCfg struct {
 	Logger struct {
 	} `json:"logger"`
 	Test struct {
-		Db             string `json:"db"`
+		DB             string `json:"db"`
 		MartAddress    string `json:"martAddress"`
 		AccrualAddress string `json:"accrualAddress"`
 	} `json:"test"`

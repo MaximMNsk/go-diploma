@@ -13,7 +13,7 @@ var Acc Accrual
 
 func TestMain(m *testing.M) {
 	_ = Conf.Init()
-	_ = Acc.Init(Conf.LocalConfig.Test.AccrualAddress, Conf.LocalConfig.Test.Db, filepath.Join(Conf.LocalConfig.App.RootPath+Conf.LocalConfig.App.AccrualPath))
+	_ = Acc.Init(Conf.LocalConfig.Test.AccrualAddress, Conf.LocalConfig.Test.DB, filepath.Join(Conf.LocalConfig.App.RootPath+Conf.LocalConfig.App.AccrualPath))
 	_ = Acc.Start()
 	defer Acc.Stop()
 }
