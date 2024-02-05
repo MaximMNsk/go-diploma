@@ -1,4 +1,3 @@
-// Package luhnalgorithm is an implementation of Luhn Algorithm, also known as the Modulus 10
 package luhnalgorithm
 
 import (
