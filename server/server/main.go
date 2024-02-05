@@ -27,7 +27,7 @@ type Server struct {
 	Config          config.Config
 	Logger          *zap.Logger
 	DB              database.Database
-	Http            http.Server
+	HTTP            http.Server
 	Accrual         accrual.Accrual
 	ShutdownProcess bool
 }
@@ -38,7 +38,7 @@ func (s *Server) New(c config.Config, l *zap.Logger) error {
 	s.Routers = chi.NewRouter()
 	s.Logger = l
 	err = s.DB.Init(context.Background(), c.DatabaseConnection)
-	s.Http = http.Server{Addr: s.Config.MartAddress, Handler: s.Routers}
+	s.HTTP = http.Server{Addr: s.Config.MartAddress, Handler: s.Routers}
 	s.Accrual = accrual.Accrual{}
 	s.ShutdownProcess = false
 	return err
@@ -74,7 +74,7 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	err = s.Http.ListenAndServe()
+	err = s.HTTP.ListenAndServe()
 	if err != nil {
 		return err
 	}
@@ -86,10 +86,16 @@ func (s *Server) Stop() error {
 	var err error
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	err = s.Http.Shutdown(shutdownCtx)
+	err = s.HTTP.Shutdown(shutdownCtx)
+	if err != nil {
+		s.Logger.Error(err.Error())
+	}
 	err = s.Accrual.Stop()
+	if err != nil {
+		s.Logger.Error(err.Error())
+	}
 	s.DB.Close()
-	return err
+	return nil
 }
 
 func (s *Server) Shutdown(res http.ResponseWriter, req *http.Request) {

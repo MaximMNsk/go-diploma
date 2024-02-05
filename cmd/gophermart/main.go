@@ -102,6 +102,7 @@ func gracefulShutdown(c conf.Config, l *zap.Logger) bool {
 		l.Error(err.Error())
 	}
 	l.Info(`Status code: ` + strconv.Itoa(response.StatusCode))
+	err = response.Body.Close()
 
 	return err == nil && response.StatusCode == http.StatusOK
 }

@@ -58,7 +58,6 @@ func (c *Config) Init() error {
 	flag.Parse()
 
 	fileConfig, errFile := os.Open(`../../server/config/config.json`)
-	defer fileConfig.Close()
 	if errFile != nil {
 		return fmt.Errorf(errFile.Error()+` : %w`, ErrFile)
 	}
@@ -66,6 +65,10 @@ func (c *Config) Init() error {
 	errDecode := decoder.Decode(&c.LocalConfig)
 	if errDecode != nil {
 		return fmt.Errorf(errDecode.Error()+` : %w`, ErrFile)
+	}
+	err := fileConfig.Close()
+	if err != nil {
+		return err
 	}
 
 	if c.DatabaseConnection == `` || c.MartAddress == `` || c.AccrualAddress == `` {

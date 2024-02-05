@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	InitError    = errors.New(`database initialization error! `)
-	MigrateError = errors.New(`migrate error! `)
+	ErrorInit    = errors.New(`database initialization error! `)
+	ErrorMigrate = errors.New(`migrate error! `)
 )
 
 type Database struct {
@@ -53,14 +53,14 @@ func (db *Database) PrepareDB() error {
 		db.DSN,
 	)
 	if err != nil {
-		return fmt.Errorf(InitError.Error(), err)
+		return fmt.Errorf(ErrorInit.Error(), err)
 	}
 	err = m.Up()
 	if err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
 			return nil
 		}
-		return fmt.Errorf(MigrateError.Error(), err)
+		return fmt.Errorf(ErrorMigrate.Error(), err)
 	}
 
 	return nil

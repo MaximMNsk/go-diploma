@@ -94,8 +94,8 @@ type GetOrderData struct {
 }
 
 func (a *Accrual) GetOrderInfo(orderNum string) (GetOrderData, error) {
-	accrualUrl := webScheme + a.Address + `/api/orders/` + orderNum
-	request, err := http.NewRequest("GET", accrualUrl, nil)
+	accrualURL := webScheme + a.Address + `/api/orders/` + orderNum
+	request, err := http.NewRequest("GET", accrualURL, nil)
 	if err != nil {
 		return GetOrderData{}, err
 	}
@@ -143,8 +143,8 @@ func (a *Accrual) SetOrderInfo(data SetOrderData) error {
 		return err
 	}
 
-	accrualUrl := webScheme + a.Address + `/api/orders`
-	request, err := http.NewRequest("POST", accrualUrl, bytes.NewBuffer(marshaledOrder))
+	accrualURL := webScheme + a.Address + `/api/orders`
+	request, err := http.NewRequest("POST", accrualURL, bytes.NewBuffer(marshaledOrder))
 	if err != nil {
 		return err
 	}
@@ -157,6 +157,10 @@ func (a *Accrual) SetOrderInfo(data SetOrderData) error {
 	}
 	if response.StatusCode != http.StatusAccepted {
 		return errors.New(`unexpected response: ` + strconv.Itoa(response.StatusCode))
+	}
+	err = response.Body.Close()
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -178,8 +182,8 @@ func (a *Accrual) SetNewAccrualType(data newAccrualType) error {
 		return err
 	}
 
-	accrualUrl := webScheme + a.Address + `/api/goods`
-	request, err := http.NewRequest("POST", accrualUrl, bytes.NewBuffer(marshaledAccType))
+	accrualURL := webScheme + a.Address + `/api/goods`
+	request, err := http.NewRequest("POST", accrualURL, bytes.NewBuffer(marshaledAccType))
 	if err != nil {
 		return err
 	}
@@ -192,6 +196,10 @@ func (a *Accrual) SetNewAccrualType(data newAccrualType) error {
 	}
 	if response.StatusCode != http.StatusOK {
 		return errors.New(`unexpected response: ` + strconv.Itoa(response.StatusCode))
+	}
+	err = response.Body.Close()
+	if err != nil {
+		return err
 	}
 
 	return nil
