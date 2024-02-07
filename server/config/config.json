@@ -13,43 +13,55 @@
   "accrual": {
     "orders": [
       {
-        "order": "",
+        "order": "651351652",
         "goods": [
           {
-            "description": "",
-            "price": 1000
+            "description": "salt",
+            "price": 100
           },
           {
-            "description": "",
-            "price": 1000
+            "description": "matches",
+            "price": 10
           }
         ]
       },
       {
-        "order": "",
+        "order": "79927398713",
         "goods": [
           {
-            "description": "",
-            "price": 1000
+            "description": "soap",
+            "price": 200
           },
           {
-            "description": "",
-            "price": 1000
+            "description": "rope",
+            "price": 500
           }
         ]
       },
       {
-        "order": "",
+        "order": "78877065223",
         "goods": [
           {
-            "description": "",
-            "price": 1000
+            "description": "iodized salt",
+            "price": 150
           },
           {
-            "description": "",
-            "price": 1000
+            "description": "liquid soap",
+            "price": 750
           }
         ]
+      }
+    ],
+    "goods": [
+      {
+        "match": "soap",
+        "reward": 5,
+        "reward_type": "%"
+      },
+      {
+        "match": "salt",
+        "reward": 10,
+        "reward_type": "%"
       }
     ]
   }

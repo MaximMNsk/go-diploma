@@ -13,5 +13,8 @@ CREATE TABLE IF NOT EXISTS public.orders
 CREATE UNIQUE INDEX IF NOT EXISTS unique_order_number
     ON public.orders(number);
 
+CREATE INDEX IF NOT EXISTS hash_order_status
+    ON public.orders USING HASH (status);
+
 
 COMMIT ;

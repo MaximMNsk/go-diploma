@@ -32,9 +32,32 @@ type LocalCfg struct {
 		MartAddress    string `json:"martAddress"`
 		AccrualAddress string `json:"accrualAddress"`
 	} `json:"test"`
+	Accrual struct {
+		Orders []SetOrderData   `json:"orders"`
+		Goods  []NewAccrualType `json:"goods"`
+	} `json:"accrual"`
 }
 
-const layer = `server`
+type Good struct {
+	Description string  `json:"description"`
+	Price       float32 `json:"price"`
+}
+type SetOrderData struct {
+	OrderNum string `json:"order"`
+	Goods    []Good `json:"goods"`
+}
+
+type NewAccrualType struct {
+	Match      string  `json:"match"`
+	Reward     float32 `json:"reward"`
+	RewardType string  `json:"reward_type"`
+}
+
+type GetOrderData struct {
+	OrderNum string  `json:"order"`
+	Status   string  `json:"status"`
+	Accrual  float32 `json:"accrual,omitempty"`
+}
 
 var (
 	ErrEnv           = errors.New(`config env error`)

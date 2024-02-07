@@ -16,9 +16,9 @@ import (
 	"go-diploma/server/cookie"
 	"go-diploma/server/storage/database"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"net/http"
-	"path/filepath"
 	"time"
 )
 
@@ -29,6 +29,7 @@ type Server struct {
 	DB              database.Database
 	HTTP            http.Server
 	Accrual         accrual.Accrual
+	StopChan        chan struct{}
 	ShutdownProcess bool
 }
 
@@ -64,16 +65,21 @@ func (s *Server) Start() error {
 		})
 	})
 
-	accrualPath := filepath.Join(s.Config.LocalConfig.App.RootPath, s.Config.LocalConfig.App.AccrualPath)
+	//accrualPath := filepath.Join(s.Config.LocalConfig.App.RootPath, s.Config.LocalConfig.App.AccrualPath)
+	accrualPath := ``
 	err = s.Accrual.Init(s.Config.AccrualAddress, s.Config.DatabaseConnection, accrualPath)
 	if err != nil {
 		return err
 	}
-	err = s.Accrual.Start()
+	//err = s.Accrual.Start()
+	//if err != nil {
+	//	return err
+	//}
+	go s.StartUpdateBackground()
+	err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
 	if err != nil {
 		return err
 	}
-
 	err = s.HTTP.ListenAndServe()
 	if err != nil {
 		return err
@@ -90,6 +96,7 @@ func (s *Server) Stop() error {
 	if err != nil {
 		s.Logger.Error(err.Error())
 	}
+	s.StopUpdateBackground()
 	err = s.Accrual.Stop()
 	if err != nil {
 		s.Logger.Error(err.Error())
@@ -101,7 +108,7 @@ func (s *Server) Stop() error {
 func (s *Server) Shutdown(res http.ResponseWriter, req *http.Request) {
 	s.ShutdownProcess = true
 	res.WriteHeader(http.StatusOK)
-	s.Stop()
+	_ = s.Stop()
 }
 
 type User struct {
@@ -136,11 +143,13 @@ func (s *Server) UserRegister(res http.ResponseWriter, req *http.Request) {
 	user.pwdHash = sha1hash.Hash(user.Password)
 	s.Logger.Debug(user.pwdHash)
 
-	_, err = s.DB.Pool.Exec(
+	var userID int
+	row := s.DB.Pool.QueryRow(
 		req.Context(),
-		`insert into public.users (login, password_hash) values ($1, $2)`,
+		`insert into public.users (login, password_hash) values ($1, $2) returning id`,
 		user.Login, user.pwdHash,
 	)
+	err = row.Scan(&userID)
 	if err != nil {
 		var insertErr *pgconn.PgError
 		if errors.As(err, &insertErr) {
@@ -155,19 +164,11 @@ func (s *Server) UserRegister(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	row := s.DB.Pool.QueryRow(
+	_, err = s.DB.Pool.Exec(
 		req.Context(),
-		`select id from public.users where login = $1`,
-		user.Login,
+		`insert into public.accruals (user_id) values ($1)`,
+		userID,
 	)
-	var userID int
-	err = row.Scan(&userID)
-	if err != nil {
-		s.Logger.Error(err.Error())
-		http.Error(res, `internal error`, http.StatusInternalServerError)
-		return
-
-	}
 
 	s.Logger.Info(`user saved`)
 
@@ -269,6 +270,8 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	userID := req.Context().Value(cookie.UserNum(`UserID`)).(int)
+
 	contentBody, err := io.ReadAll(req.Body)
 	defer req.Body.Close()
 	if err != nil {
@@ -293,16 +296,120 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// get by order
-	// if order exists and user is equal - return 200
-	// if order exists and user is not equal - return 409
-	// if not exists:
-	// save to db
-	// get from accrual info about order
+	row := s.DB.Pool.QueryRow(
+		req.Context(),
+		`select user_id from public.orders where number = $1`,
+		orderNum,
+	)
+	var savedOrderUserID int
+	err = row.Scan(&savedOrderUserID)
+
+	isSavedOrder := true
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			isSavedOrder = false
+			s.Logger.Debug(`saving is allowed`)
+		} else {
+			s.Logger.Error(err.Error())
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if userID == savedOrderUserID && isSavedOrder {
+		s.Logger.Warn(`order was uploaded by current user`)
+		res.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if userID != savedOrderUserID && isSavedOrder {
+		s.Logger.Warn(`order was uploaded by another user`)
+		http.Error(res, err.Error(), http.StatusConflict)
+		return
+	}
+
+	isEmptyAccrual := false
+	accrualData, err := s.Accrual.GetOrderInfo(orderNum)
+	fmt.Println(accrualData)
+	if err != nil {
+		isEmptyAccrual = true
+		s.Logger.Warn(err.Error())
+	}
+
+	//tx, err := s.DB.Pool.Begin(req.Context())
+	//if err != nil {
+	//	s.Logger.Error(err.Error())
+	//	http.Error(res, ``, http.StatusInternalServerError)
+	//	return
+	//}
 	//
+	//eg := errgroup.Group{}
+	//eg.Go(func() error {
+	//	var errTx error
+	if isEmptyAccrual {
+		_, err = s.DB.Pool.Exec(
+			req.Context(),
+			`insert into public.orders (user_id, number) values ($1, $2)`,
+			userID,
+			orderNum,
+		)
+		if err != nil {
+			s.Logger.Error(err.Error())
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		_, err = s.DB.Pool.Exec(
+			req.Context(),
+			`insert into public.orders (user_id, number, status, accrual) values ($1, $2, $3, $4)`,
+			userID,
+			orderNum,
+			accrualData.Status,
+			accrualData.Accrual,
+		)
+		if err != nil {
+			s.Logger.Error(err.Error())
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if !isEmptyAccrual {
+		_, err = s.DB.Pool.Exec(
+			req.Context(),
+			`update public.accruals
+				 set
+	                      current_balance = current_balance+$2,
+		                   total_balance = total_balance + $2
+				where
+				    user_id = $1`,
+			userID,
+			accrualData.Accrual,
+		)
+		if err != nil {
+			s.Logger.Error(err.Error())
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	//})
+
+	//if err = eg.Wait(); err != nil {
+	//	errRollback := tx.Rollback(req.Context())
+	//	s.Logger.Error(err.Error())
+	//	if errRollback != nil {
+	//		s.Logger.Error(errRollback.Error())
+	//	}
+	//	http.Error(res, err.Error(), http.StatusInternalServerError)
+	//	return
+	//}
+	//if err = tx.Commit(req.Context()); err != nil {
+	//	s.Logger.Error(err.Error())
+	//	http.Error(res, err.Error(), http.StatusInternalServerError)
+	//	return
+	//}
 
 	s.Logger.Info(`successfully saved`)
-	res.WriteHeader(http.StatusOK)
+	res.WriteHeader(http.StatusAccepted)
 }
 
 // GetOrders
@@ -327,4 +434,110 @@ func (s *Server) Withdraw(res http.ResponseWriter, req *http.Request) {
 // Запрос на списание средств
 func (s *Server) Withdrawals(res http.ResponseWriter, req *http.Request) {
 
+}
+
+func (s *Server) StartUpdateBackground() {
+	s.Logger.Info(`start updater`)
+
+	ctx := context.Background()
+	s.StopChan = make(chan struct{})
+	defer close(s.StopChan)
+
+	for {
+		var sleeper time.Duration
+		sleeper = 1
+		select {
+		case <-s.StopChan:
+			s.Logger.Debug(`stop background updater`)
+			return
+		default:
+			time.Sleep(sleeper * time.Second)
+		}
+
+		unhandledOrders, err := s.GetUnhandledOrders()
+		if err != nil {
+			s.Logger.Warn(err.Error())
+			continue
+		}
+		if len(unhandledOrders) == 0 {
+			continue
+		}
+		for _, orderNum := range unhandledOrders {
+			info, err := s.Accrual.GetOrderInfo(orderNum)
+			if err != nil {
+				sleeper = 60
+				s.Logger.Error(err.Error())
+				continue
+			}
+
+			tx, err := s.DB.Pool.Begin(ctx)
+			if err != nil {
+				s.Logger.Error(err.Error())
+				continue
+			}
+
+			eg := errgroup.Group{}
+			eg.Go(func() error {
+				_, err = tx.Exec(ctx, `update public.orders set status = $1, accrual = $2 where number = $3`,
+					info.Status, info.Accrual, orderNum)
+				if err != nil {
+					return err
+				}
+				_, err = tx.Exec(ctx,
+					`update public.accruals set current_balance = current_balance+$1,
+                           total_balance = total_balance+$2 
+                       where user_id = 
+                                (select user_id from public.orders where number = $3)`,
+					info.Status, info.Accrual, orderNum)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+
+			if err = eg.Wait(); err != nil {
+				errRollback := tx.Rollback(ctx)
+				s.Logger.Error(err.Error())
+				if errRollback != nil {
+					s.Logger.Error(errRollback.Error())
+				}
+				continue
+			}
+			if err = tx.Commit(ctx); err != nil {
+				s.Logger.Error(err.Error())
+			}
+
+		}
+	}
+
+}
+
+func (s *Server) StopUpdateBackground() {
+	go func() {
+		s.StopChan <- struct{}{}
+	}()
+}
+
+type UnhandledOrders []string
+
+func (s *Server) GetUnhandledOrders() (UnhandledOrders, error) {
+	var unhandledOrders UnhandledOrders
+	rows, err := s.DB.Pool.Query(
+		context.Background(),
+		`select number from public.orders where status in ('NEW', 'PROCESSING')`,
+	)
+	emptySlice := make([]string, 0)
+	if err != nil {
+		return emptySlice, err
+	}
+	for rows.Next() {
+		var unhandledOrder string
+		err = rows.Scan(&unhandledOrder)
+		if err != nil {
+			return emptySlice, err
+		}
+		unhandledOrders = append(unhandledOrders, unhandledOrder)
+	}
+
+	return unhandledOrders, nil
 }

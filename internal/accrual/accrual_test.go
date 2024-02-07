@@ -25,7 +25,7 @@ func TestAccrual_SetNewAccrualType(t *testing.T) {
 	Conf.Get()
 
 	type args struct {
-		accType newAccrualType
+		accType config.NewAccrualType
 	}
 
 	tests := []struct {
@@ -35,7 +35,7 @@ func TestAccrual_SetNewAccrualType(t *testing.T) {
 		{
 			name: `Test set new accrual type`,
 			arguments: args{
-				accType: newAccrualType{
+				accType: config.NewAccrualType{
 					Match:      `test`,
 					Reward:     5,
 					RewardType: `%`,
@@ -56,7 +56,7 @@ func TestAccrual_SetOrderInfo(t *testing.T) {
 	Conf.Get()
 
 	type args struct {
-		order SetOrderData
+		order config.SetOrderData
 	}
 
 	tests := []struct {
@@ -66,9 +66,9 @@ func TestAccrual_SetOrderInfo(t *testing.T) {
 		{
 			name: `Test set order accrual`,
 			arguments: args{
-				order: SetOrderData{
+				order: config.SetOrderData{
 					OrderNum: "4561261212345467",
-					Goods: []Good{
+					Goods: []config.Good{
 						{
 							Description: `First good`,
 							Price:       5000,
@@ -97,7 +97,7 @@ func TestAccrual_GetOrderInfo(t *testing.T) {
 	type args struct {
 		orderNum string
 	}
-	type want GetOrderData
+	type want config.GetOrderData
 
 	tests := []struct {
 		name      string

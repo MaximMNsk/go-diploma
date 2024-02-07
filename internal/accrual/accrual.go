@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"go-diploma/server/config"
 	"io"
 	"net/http"
 	"net/url"
@@ -20,13 +21,13 @@ type Accrual struct {
 	Pid     int
 }
 
-const webScheme = `http://`
+const protocol = `http://`
 
 var ErrEmptyAddr = errors.New(`host or port not found`)
 
 func ValidateURL(str string) (string, error) {
 	if str[0:4] != `http` {
-		str = webScheme + str
+		str = protocol + str
 	}
 	u, err := url.Parse(str)
 	if err != nil {
@@ -79,46 +80,42 @@ func (a *Accrual) Stop() error {
 	return nil
 }
 
-func AccrualDaemon(stop chan struct{}) {
-
-}
-
 /**
  * Получаем инфо по заказу по его ID.
  */
 
-type GetOrderData struct {
-	OrderNum string  `json:"order"`
-	Status   string  `json:"status"`
-	Accrual  float32 `json:"accrual,omitempty"`
-}
+//type GetOrderData struct {
+//	OrderNum string  `json:"order"`
+//	Status   string  `json:"status"`
+//	Accrual  float32 `json:"accrual,omitempty"`
+//}
 
-func (a *Accrual) GetOrderInfo(orderNum string) (GetOrderData, error) {
-	accrualURL := webScheme + a.Address + `/api/orders/` + orderNum
+func (a *Accrual) GetOrderInfo(orderNum string) (config.GetOrderData, error) {
+	accrualURL := protocol + a.Address + `/api/orders/` + orderNum
 	request, err := http.NewRequest("GET", accrualURL, nil)
 	if err != nil {
-		return GetOrderData{}, err
+		return config.GetOrderData{}, err
 	}
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return GetOrderData{}, err
+		return config.GetOrderData{}, err
 	}
 
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return GetOrderData{}, err
+		return config.GetOrderData{}, err
 	}
 
 	if response.StatusCode != http.StatusOK {
-		return GetOrderData{}, errors.New(`unexpected response: ` + strconv.Itoa(response.StatusCode))
+		return config.GetOrderData{}, errors.New(`unexpected response: ` + strconv.Itoa(response.StatusCode))
 	}
 
-	var resp GetOrderData
+	var resp config.GetOrderData
 	err = json.Unmarshal(body, &resp)
 	if err != nil {
-		return GetOrderData{}, err
+		return config.GetOrderData{}, err
 	}
 
 	return resp, nil
@@ -128,22 +125,22 @@ func (a *Accrual) GetOrderInfo(orderNum string) (GetOrderData, error) {
  * Сохраняем заказ
  */
 
-type Good struct {
-	Description string  `json:"description"`
-	Price       float32 `json:"price"`
-}
-type SetOrderData struct {
-	OrderNum string `json:"order"`
-	Goods    []Good `json:"goods"`
-}
+//type Good struct {
+//	Description string  `json:"description"`
+//	Price       float32 `json:"price"`
+//}
+//type SetOrderData struct {
+//	OrderNum string `json:"order"`
+//	Goods    []Good `json:"goods"`
+//}
 
-func (a *Accrual) SetOrderInfo(data SetOrderData) error {
+func (a *Accrual) SetOrderInfo(data config.SetOrderData) error {
 	marshaledOrder, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
-	accrualURL := webScheme + a.Address + `/api/orders`
+	accrualURL := protocol + a.Address + `/api/orders`
 	request, err := http.NewRequest("POST", accrualURL, bytes.NewBuffer(marshaledOrder))
 	if err != nil {
 		return err
@@ -170,19 +167,19 @@ func (a *Accrual) SetOrderInfo(data SetOrderData) error {
  * Сохраняем данные для расчета вознаграждения за заказ
  */
 
-type newAccrualType struct {
-	Match      string  `json:"match"`
-	Reward     float32 `json:"reward"`
-	RewardType string  `json:"reward_type"`
-}
+//type NewAccrualType struct {
+//	Match      string  `json:"match"`
+//	Reward     float32 `json:"reward"`
+//	RewardType string  `json:"reward_type"`
+//}
 
-func (a *Accrual) SetNewAccrualType(data newAccrualType) error {
+func (a *Accrual) SetNewAccrualType(data config.NewAccrualType) error {
 	marshaledAccType, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
-	accrualURL := webScheme + a.Address + `/api/goods`
+	accrualURL := protocol + a.Address + `/api/goods`
 	request, err := http.NewRequest("POST", accrualURL, bytes.NewBuffer(marshaledAccType))
 	if err != nil {
 		return err
@@ -200,6 +197,24 @@ func (a *Accrual) SetNewAccrualType(data newAccrualType) error {
 	err = response.Body.Close()
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (a *Accrual) Prepare(orders []config.SetOrderData, types []config.NewAccrualType) error {
+	for _, order := range orders {
+		err := a.SetOrderInfo(order)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, singleType := range types {
+		err := a.SetNewAccrualType(singleType)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
