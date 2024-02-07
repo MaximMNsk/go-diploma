@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/caarlos0/env/v6"
 	"os"
+	"path/filepath"
 )
 
 type Config struct {
@@ -80,7 +81,11 @@ func (c *Config) Init() error {
 	flag.StringVar(&c.Command, "command", "start", "action command start/stop, default start")
 	flag.Parse()
 
-	fileConfig, errFile := os.Open(`../../server/config/config.json`)
+	pwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	fileConfig, errFile := os.Open(filepath.Join(pwd, `./config.json`))
 	if errFile != nil {
 		return fmt.Errorf(errFile.Error()+` : %w`, ErrFile)
 	}
@@ -89,10 +94,12 @@ func (c *Config) Init() error {
 	if errDecode != nil {
 		return fmt.Errorf(errDecode.Error()+` : %w`, ErrFile)
 	}
-	err := fileConfig.Close()
+	err = fileConfig.Close()
 	if err != nil {
 		return err
 	}
+
+	fmt.Println(c)
 
 	if c.DatabaseConnection == `` || c.MartAddress == `` || c.AccrualAddress == `` {
 		return ErrConfigConsist

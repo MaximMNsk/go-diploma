@@ -1,7 +1,7 @@
 {
   "app": {
     "rootPath": "D:\\\\Projects\\go-diploma\\",
-    "martPath": "cmd/gophermart/go_build_main.exe",
+    "martPath": "cmd/gophermart/gophermart.exe",
     "accrualPath": "cmd/accrual/accrual_windows_amd64.exe",
     "migrationsPath": "server/storage/migrations"
   },

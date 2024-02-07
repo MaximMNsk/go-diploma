@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io"
 	"net/http"
+	"path/filepath"
 	"time"
 )
 
@@ -65,8 +66,8 @@ func (s *Server) Start() error {
 		})
 	})
 
-	//accrualPath := filepath.Join(s.Config.LocalConfig.App.RootPath, s.Config.LocalConfig.App.AccrualPath)
-	accrualPath := ``
+	accrualPath := filepath.Join(s.Config.LocalConfig.App.RootPath, s.Config.LocalConfig.App.AccrualPath)
+	//accrualPath := ``
 	err = s.Accrual.Init(s.Config.AccrualAddress, s.Config.DatabaseConnection, accrualPath)
 	if err != nil {
 		return err
@@ -494,7 +495,7 @@ func (s *Server) StartUpdateBackground() {
                            total_balance = total_balance+$2 
                        where user_id = 
                                 (select user_id from public.orders where number = $3)`,
-					info.Status, info.Accrual, orderNum)
+					info.Accrual, info.Accrual, orderNum)
 				if err != nil {
 					return err
 				}

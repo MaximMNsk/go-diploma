@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go-diploma/server/config"
 	"io"
 	"net/http"
@@ -46,6 +47,7 @@ func ValidateURL(str string) (string, error) {
 func (a *Accrual) Init(address string, dsn string, binPath string) error {
 	var err error
 	a.Address, err = ValidateURL(address)
+	fmt.Println(a.Address)
 	a.DSN = dsn
 	a.BinPath = binPath
 	if err != nil {
