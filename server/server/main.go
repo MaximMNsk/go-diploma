@@ -76,10 +76,10 @@ func (s *Server) Start() error {
 	//	return err
 	//}
 	go s.StartUpdateBackground()
-	err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
-	if err != nil {
-		return err
-	}
+	//err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
+	//if err != nil {
+	//	return err
+	//}
 	err = s.HTTP.ListenAndServe()
 	if err != nil {
 		return err
@@ -169,6 +169,12 @@ func (s *Server) UserRegister(res http.ResponseWriter, req *http.Request) {
 		`insert into public.accruals (user_id) values ($1)`,
 		userID,
 	)
+
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, `internal error`, http.StatusInternalServerError)
+		return
+	}
 
 	s.Logger.Info(`user saved`)
 
