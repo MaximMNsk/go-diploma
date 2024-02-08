@@ -77,15 +77,15 @@ func (s *Server) Start() error {
 		})
 	})
 
-	err = s.Accrual.Start()
-	if err != nil {
-		return err
-	}
-	err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
-	if err != nil {
-		return err
-	}
-	go s.StartUpdateBackground()
+	//err = s.Accrual.Start()
+	//if err != nil {
+	//	return err
+	//}
+	//err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
+	//if err != nil {
+	//	return err
+	//}
+	//go s.StartUpdateBackground()
 	err = s.HTTP.ListenAndServe()
 	if err != nil {
 		return err
