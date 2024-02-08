@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -40,10 +41,17 @@ func (s *Server) New(c config.Config, l *zap.Logger) error {
 	s.Routers = chi.NewRouter()
 	s.Logger = l
 	err = s.DB.Init(context.Background(), c.DatabaseConnection)
+	if err != nil {
+		return err
+	}
 	s.HTTP = http.Server{Addr: s.Config.MartAddress, Handler: s.Routers}
-	s.Accrual = accrual.Accrual{}
+	accrualPath := filepath.Join(s.Config.LocalConfig.App.RootPath, s.Config.LocalConfig.App.AccrualPath)
+	err = s.Accrual.Init(s.Config.AccrualAddress, s.Config.DatabaseConnection, accrualPath)
+	if err != nil {
+		return err
+	}
 	s.ShutdownProcess = false
-	return err
+	return nil
 }
 
 func (s *Server) Start() error {
@@ -63,24 +71,21 @@ func (s *Server) Start() error {
 			r.Use(cookie.AuthChecker)
 			r.Post(`/api/user/orders`, s.SaveOrder)
 			r.Get(`/api/user/orders`, s.GetOrders)
+			r.Get(`/api/user/balance`, s.GetBalance)
+			r.Post(`/api/user/withdraw`, s.Withdraw)
+			r.Get(`/api/user/withdrawals`, s.Withdrawals)
 		})
 	})
 
-	accrualPath := filepath.Join(s.Config.LocalConfig.App.RootPath, s.Config.LocalConfig.App.AccrualPath)
-	//accrualPath := ``
-	err = s.Accrual.Init(s.Config.AccrualAddress, s.Config.DatabaseConnection, accrualPath)
+	err = s.Accrual.Start()
 	if err != nil {
 		return err
 	}
-	//err = s.Accrual.Start()
-	//if err != nil {
-	//	return err
-	//}
+	err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
+	if err != nil {
+		return err
+	}
 	go s.StartUpdateBackground()
-	//err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
-	//if err != nil {
-	//	return err
-	//}
 	err = s.HTTP.ListenAndServe()
 	if err != nil {
 		return err
@@ -337,22 +342,11 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 
 	isEmptyAccrual := false
 	accrualData, err := s.Accrual.GetOrderInfo(orderNum)
-	fmt.Println(accrualData)
 	if err != nil {
 		isEmptyAccrual = true
 		s.Logger.Warn(err.Error())
 	}
 
-	//tx, err := s.DB.Pool.Begin(req.Context())
-	//if err != nil {
-	//	s.Logger.Error(err.Error())
-	//	http.Error(res, ``, http.StatusInternalServerError)
-	//	return
-	//}
-	//
-	//eg := errgroup.Group{}
-	//eg.Go(func() error {
-	//	var errTx error
 	if isEmptyAccrual {
 		_, err = s.DB.Pool.Exec(
 			req.Context(),
@@ -385,8 +379,7 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 			req.Context(),
 			`update public.accruals
 				 set
-	                      current_balance = current_balance+$2,
-		                   total_balance = total_balance + $2
+	                      current_balance = current_balance + $2
 				where
 				    user_id = $1`,
 			userID,
@@ -398,22 +391,6 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	//})
-
-	//if err = eg.Wait(); err != nil {
-	//	errRollback := tx.Rollback(req.Context())
-	//	s.Logger.Error(err.Error())
-	//	if errRollback != nil {
-	//		s.Logger.Error(errRollback.Error())
-	//	}
-	//	http.Error(res, err.Error(), http.StatusInternalServerError)
-	//	return
-	//}
-	//if err = tx.Commit(req.Context()); err != nil {
-	//	s.Logger.Error(err.Error())
-	//	http.Error(res, err.Error(), http.StatusInternalServerError)
-	//	return
-	//}
 
 	s.Logger.Info(`successfully saved`)
 	res.WriteHeader(http.StatusAccepted)
@@ -422,25 +399,266 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 // GetOrders
 // Получение текущего баланса пользователя
 func (s *Server) GetOrders(res http.ResponseWriter, req *http.Request) {
+	if s.ShutdownProcess {
+		http.Error(res, "503 service unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
+	userID := req.Context().Value(cookie.UserNum(`UserID`)).(int)
+
+	rows, err := s.DB.Pool.Query(req.Context(),
+		`select number, status, accrual, uploaded_at from public.orders where user_id = $1`,
+		userID)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			s.Logger.Error(err.Error())
+			http.Error(res, "internal error", http.StatusInternalServerError)
+			return
+		}
+		s.Logger.Error(err.Error())
+		http.Error(res, "", http.StatusNoContent)
+		return
+	}
+
+	var savedOrders []config.GetOrderData
+	for rows.Next() {
+		var savedOrder config.GetOrderData
+		err := rows.Scan(&savedOrder.OrderNum, &savedOrder.Status, &savedOrder.Accrual, &savedOrder.UploadedAt)
+		if err != nil {
+			s.Logger.Error(err.Error())
+			http.Error(res, "internal error", http.StatusInternalServerError)
+			return
+		}
+		savedOrders = append(savedOrders, savedOrder)
+	}
+
+	marshaledOrders, err := json.Marshal(savedOrders)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	res.WriteHeader(http.StatusOK)
+	_, err = res.Write(marshaledOrders)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		return
+	}
+	s.Logger.Info(`success GetOrders`)
+}
+
+type Balance struct {
+	Balance   float32 `json:"balance"`
+	Withdrawn float32 `json:"total_withdrawn"`
 }
 
 // GetBalance
 // Получение текущего баланса пользователя
 func (s *Server) GetBalance(res http.ResponseWriter, req *http.Request) {
+	if s.ShutdownProcess {
+		http.Error(res, "503 service unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
+	userID := req.Context().Value(cookie.UserNum(`UserID`)).(int)
+
+	var bal Balance
+	err := s.DB.Pool.QueryRow(
+		req.Context(),
+		`select current_balance, total_withdrawn from public.accruals where user_id = $1`,
+		userID,
+	).Scan(&bal.Balance, &bal.Withdrawn)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(res, "", http.StatusNoContent)
+		} else {
+			http.Error(res, "", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	marshaled, err := json.Marshal(bal)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, "", http.StatusInternalServerError)
+		return
+	}
+
+	res.WriteHeader(http.StatusOK)
+	_, err = res.Write(marshaled)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		return
+	}
+	s.Logger.Info(`success GetBalance`)
 }
 
 // Withdraw
 // Запрос на списание средств
 func (s *Server) Withdraw(res http.ResponseWriter, req *http.Request) {
+	if s.ShutdownProcess {
+		http.Error(res, "503 service unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
+	userID := req.Context().Value(cookie.UserNum(`UserID`)).(int)
+
+	contentBody, err := io.ReadAll(req.Body)
+	defer req.Body.Close()
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, ``, http.StatusInternalServerError)
+		return
+	}
+
+	var w Withdrawal
+	err = json.Unmarshal(contentBody, &w)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, ``, http.StatusInternalServerError)
+		return
+	}
+
+	s.Logger.Info(`try to withdraw sum: ` + strconv.Itoa(int(w.Sum)) + ` by order: ` + w.Order)
+
+	var acc float32
+	err = s.DB.Pool.QueryRow(req.Context(),
+		`select accrual from public.orders where number = $1`,
+		w.Order,
+	).Scan(&acc)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			s.Logger.Error(err.Error())
+			http.Error(res, `no orders`, http.StatusUnprocessableEntity)
+			return
+		} else {
+			s.Logger.Error(err.Error())
+			http.Error(res, ``, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if w.Sum > acc {
+		s.Logger.Error(`insufficient funds`)
+		http.Error(res, `insufficient funds`, http.StatusPaymentRequired)
+		return
+	}
+
+	tx, err := s.DB.Pool.Begin(req.Context())
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, ``, http.StatusInternalServerError)
+		return
+	}
+
+	eg := errgroup.Group{}
+
+	eg.Go(func() error {
+		_, err = tx.Exec(req.Context(), `update public.orders set accrual = accrual-$1 where number = $2`,
+			w.Sum, w.Order)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(
+			req.Context(),
+			`insert into public.withdrawals (user_id, sum, order_number)
+					values ($1, $2, $3)`,
+			userID, w.Sum, w.Order)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(req.Context(),
+			`update public.accruals set current_balance = current_balance-$1,
+	                      total_withdrawn = total_withdrawn+$2
+	                  where user_id =
+	                           (select user_id from public.orders where number = $3)`,
+			w.Sum, w.Sum, w.Order)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err = eg.Wait(); err != nil {
+		s.Logger.Error(err.Error())
+		errRollback := tx.Rollback(req.Context())
+		if errRollback != nil {
+			s.Logger.Error(errRollback.Error())
+		}
+		http.Error(res, ``, http.StatusInternalServerError)
+		return
+	}
+	if err = tx.Commit(req.Context()); err != nil {
+		http.Error(res, ``, http.StatusInternalServerError)
+		s.Logger.Error(err.Error())
+	}
+
+	res.WriteHeader(http.StatusOK)
+}
+
+type Withdrawal struct {
+	Order string  `json:"order"`
+	Sum   float32 `json:"sum"`
 }
 
 // Withdrawals
-// Запрос на списание средств
+// Получение информации о выводе средств
 func (s *Server) Withdrawals(res http.ResponseWriter, req *http.Request) {
+	if s.ShutdownProcess {
+		http.Error(res, "503 service unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
+	userID := req.Context().Value(cookie.UserNum(`UserID`)).(int)
+
+	rows, err := s.DB.Pool.Query(
+		req.Context(),
+		`select sum, order_number from public.withdrawals where user_id = $1`,
+		userID,
+	)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(res, "no withdrawals", http.StatusNoContent)
+		} else {
+			http.Error(res, "", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	var ws []Withdrawal
+	for rows.Next() {
+		var w Withdrawal
+		err = rows.Scan(&w.Sum, &w.Order)
+		if err != nil {
+			s.Logger.Error(err.Error())
+			http.Error(res, "", http.StatusInternalServerError)
+			return
+		}
+		ws = append(ws, w)
+	}
+	if len(ws) == 0 {
+		s.Logger.Warn(`no Withdrawals for user: ` + strconv.Itoa(userID))
+		http.Error(res, "no withdrawals", http.StatusNoContent)
+		return
+	}
+
+	marshaled, err := json.Marshal(ws)
+	if err != nil {
+		s.Logger.Warn(err.Error())
+		http.Error(res, "", http.StatusInternalServerError)
+		return
+	}
+
+	res.WriteHeader(http.StatusOK)
+	_, err = res.Write(marshaled)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		return
+	}
+	s.Logger.Info(`success GetWithdrawals`)
 }
 
 func (s *Server) StartUpdateBackground() {
@@ -452,7 +670,7 @@ func (s *Server) StartUpdateBackground() {
 
 	for {
 		var sleeper time.Duration
-		sleeper = 1
+		sleeper = 10
 		select {
 		case <-s.StopChan:
 			s.Logger.Debug(`stop background updater`)
@@ -491,11 +709,10 @@ func (s *Server) StartUpdateBackground() {
 					return err
 				}
 				_, err = tx.Exec(ctx,
-					`update public.accruals set current_balance = current_balance+$1,
-                           total_balance = total_balance+$2 
+					`update public.accruals set current_balance = current_balance + $1,
                        where user_id = 
-                                (select user_id from public.orders where number = $3)`,
-					info.Accrual, info.Accrual, orderNum)
+                                (select user_id from public.orders where number = $2)`,
+					info.Accrual, orderNum)
 				if err != nil {
 					return err
 				}
@@ -503,8 +720,9 @@ func (s *Server) StartUpdateBackground() {
 			})
 
 			if err = eg.Wait(); err != nil {
-				errRollback := tx.Rollback(ctx)
 				s.Logger.Error(err.Error())
+
+				errRollback := tx.Rollback(ctx)
 				if errRollback != nil {
 					s.Logger.Error(errRollback.Error())
 				}
@@ -516,7 +734,6 @@ func (s *Server) StartUpdateBackground() {
 
 		}
 	}
-
 }
 
 func (s *Server) StopUpdateBackground() {

@@ -55,9 +55,10 @@ type NewAccrualType struct {
 }
 
 type GetOrderData struct {
-	OrderNum string  `json:"order"`
-	Status   string  `json:"status"`
-	Accrual  float32 `json:"accrual,omitempty"`
+	OrderNum   string      `json:"order"`
+	Status     string      `json:"status"`
+	Accrual    float32     `json:"accrual,omitempty"`
+	UploadedAt interface{} `json:"uploaded_at"`
 }
 
 var (
@@ -98,8 +99,6 @@ func (c *Config) Init() error {
 	if err != nil {
 		return err
 	}
-
-	fmt.Println(c)
 
 	if c.DatabaseConnection == `` || c.MartAddress == `` || c.AccrualAddress == `` {
 		return ErrConfigConsist

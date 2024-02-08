@@ -3,7 +3,7 @@ BEGIN TRANSACTION;
 CREATE TABLE IF NOT EXISTS public.orders
 (
     id serial PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT NOW() NOT NULL,
     user_id int NOT NULL,
     number TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'NEW',
