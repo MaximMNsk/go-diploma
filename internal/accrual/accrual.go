@@ -84,12 +84,6 @@ func (a *Accrual) Stop() error {
  * Получаем инфо по заказу по его ID.
  */
 
-//type GetOrderData struct {
-//	OrderNum string  `json:"order"`
-//	Status   string  `json:"status"`
-//	Accrual  float32 `json:"accrual,omitempty"`
-//}
-
 var ErrUnexpectedResponse = errors.New(`unexpected response`)
 
 func (a *Accrual) GetOrderInfo(orderNum string) (config.GetOrderData, error) {
@@ -127,15 +121,6 @@ func (a *Accrual) GetOrderInfo(orderNum string) (config.GetOrderData, error) {
  * Сохраняем заказ
  */
 
-//type Good struct {
-//	Description string  `json:"description"`
-//	Price       float32 `json:"price"`
-//}
-//type SetOrderData struct {
-//	OrderNum string `json:"order"`
-//	Goods    []Good `json:"goods"`
-//}
-
 func (a *Accrual) SetOrderInfo(data config.SetOrderData) error {
 	marshaledOrder, err := json.Marshal(data)
 	if err != nil {
@@ -168,12 +153,6 @@ func (a *Accrual) SetOrderInfo(data config.SetOrderData) error {
 /**
  * Сохраняем данные для расчета вознаграждения за заказ
  */
-
-//type NewAccrualType struct {
-//	Match      string  `json:"match"`
-//	Reward     float32 `json:"reward"`
-//	RewardType string  `json:"reward_type"`
-//}
 
 func (a *Accrual) SetNewAccrualType(data config.NewAccrualType) error {
 	marshaledAccType, err := json.Marshal(data)

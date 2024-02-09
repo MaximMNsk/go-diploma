@@ -676,10 +676,7 @@ func (s *Server) StartUpdateBackground() {
 		if len(unhandledOrders) == 0 {
 			continue
 		}
-		//err = s.PrepareUnhandledOrders(unhandledOrders)
-		//if err != nil {
-		//	continue
-		//}
+
 		for _, orderNum := range unhandledOrders {
 			info, err := s.Accrual.GetOrderInfo(orderNum)
 			if err != nil {
@@ -759,16 +756,3 @@ func (s *Server) GetUnhandledOrders() (UnhandledOrders, error) {
 
 	return unhandledOrders, nil
 }
-
-//func (s *Server) PrepareUnhandledOrders(o UnhandledOrders) error {
-//	var batch pgx.Batch
-//	for _, v := range o {
-//		batch.Queue(`update public.orders set status = $1 where number = $2`, `PROCESSING`, v)
-//	}
-//	_, err := s.DB.Pool.SendBatch(context.Background(), &batch).Exec()
-//	if err != nil {
-//		return err
-//	}
-//
-//	return nil
-//}
