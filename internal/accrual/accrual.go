@@ -90,6 +90,8 @@ func (a *Accrual) Stop() error {
 //	Accrual  float32 `json:"accrual,omitempty"`
 //}
 
+var ErrUnexpectedResponse = errors.New(`unexpected response`)
+
 func (a *Accrual) GetOrderInfo(orderNum string) (config.GetOrderData, error) {
 	accrualURL := protocol + a.Address + `/api/orders/` + orderNum
 	request, err := http.NewRequest("GET", accrualURL, nil)
@@ -109,7 +111,7 @@ func (a *Accrual) GetOrderInfo(orderNum string) (config.GetOrderData, error) {
 	}
 
 	if response.StatusCode != http.StatusOK {
-		return config.GetOrderData{}, errors.New(`unexpected response: ` + strconv.Itoa(response.StatusCode))
+		return config.GetOrderData{}, ErrUnexpectedResponse
 	}
 
 	var resp config.GetOrderData

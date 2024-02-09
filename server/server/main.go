@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"go-diploma/internal/accrual"
 	"go-diploma/internal/utils/hash/sha1hash"
-	"go-diploma/internal/utils/luhnalgorithm"
 	"go-diploma/server/compress/gzipapp"
 	"go-diploma/server/config"
 	"go-diploma/server/cookie"
@@ -72,20 +70,22 @@ func (s *Server) Start() error {
 			r.Post(`/api/user/orders`, s.SaveOrder)
 			r.Get(`/api/user/orders`, s.GetOrders)
 			r.Get(`/api/user/balance`, s.GetBalance)
-			r.Post(`/api/user/withdraw`, s.Withdraw)
+			r.Post(`/api/user/balance/withdraw`, s.Withdraw)
 			r.Get(`/api/user/withdrawals`, s.Withdrawals)
 		})
 	})
 
-	//err = s.Accrual.Start()
-	//if err != nil {
-	//	return err
-	//}
-	//err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
-	//if err != nil {
-	//	return err
-	//}
-	//go s.StartUpdateBackground()
+	if s.Config.Mode == `full` {
+		err = s.Accrual.Start()
+		if err != nil {
+			return err
+		}
+		err = s.Accrual.Prepare(s.Config.LocalConfig.Accrual.Orders, s.Config.LocalConfig.Accrual.Goods)
+		if err != nil {
+			return err
+		}
+	}
+	go s.StartUpdateBackground()
 	err = s.HTTP.ListenAndServe()
 	if err != nil {
 		return err
@@ -294,38 +294,25 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 
 	orderNum := string(contentBody)
 
-	isLuhn, err := luhnalgorithm.IsLuhnValid(orderNum)
-	if err != nil {
-		err := fmt.Errorf(`luhn calc error: %w`, err)
-		s.Logger.Error(err.Error())
-		http.Error(res, `bad request`, http.StatusBadRequest)
-		return
-	}
-	if !isLuhn {
-		err := errors.New(`wrong format`)
-		s.Logger.Error(err.Error())
-		http.Error(res, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
-
-	row := s.DB.Pool.QueryRow(
+	var savedOrderUserID int
+	err = s.DB.Pool.QueryRow(
 		req.Context(),
 		`select user_id from public.orders where number = $1`,
 		orderNum,
-	)
-	var savedOrderUserID int
-	err = row.Scan(&savedOrderUserID)
+	).Scan(&savedOrderUserID)
 
 	isSavedOrder := true
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			isSavedOrder = false
-			s.Logger.Debug(`saving is allowed`)
-		} else {
-			s.Logger.Error(err.Error())
-			http.Error(res, err.Error(), http.StatusInternalServerError)
-			return
-		}
+
+	if savedOrderUserID == 0 {
+		isSavedOrder = false
+		s.Logger.Debug(`saving is allowed`)
+		s.Logger.Info(`saved order user id: ` + strconv.Itoa(savedOrderUserID))
+	}
+
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		s.Logger.Error(err.Error())
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	if userID == savedOrderUserID && isSavedOrder {
@@ -336,7 +323,7 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 
 	if userID != savedOrderUserID && isSavedOrder {
 		s.Logger.Warn(`order was uploaded by another user`)
-		http.Error(res, err.Error(), http.StatusConflict)
+		http.Error(res, `another user`, http.StatusConflict)
 		return
 	}
 
@@ -392,7 +379,7 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	s.Logger.Info(`successfully saved`)
+	s.Logger.Info(`successfully saved order: ` + orderNum)
 	res.WriteHeader(http.StatusAccepted)
 }
 
@@ -439,6 +426,7 @@ func (s *Server) GetOrders(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	res.Header().Add(`Content-Type`, `application/json`)
 	res.WriteHeader(http.StatusOK)
 	_, err = res.Write(marshaledOrders)
 	if err != nil {
@@ -449,8 +437,8 @@ func (s *Server) GetOrders(res http.ResponseWriter, req *http.Request) {
 }
 
 type Balance struct {
-	Balance   float32 `json:"balance"`
-	Withdrawn float32 `json:"total_withdrawn"`
+	Balance   float32 `json:"current"`
+	Withdrawn float32 `json:"withdrawn"`
 }
 
 // GetBalance
@@ -486,6 +474,7 @@ func (s *Server) GetBalance(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	res.Header().Add(`Content-Type`, `application/json`)
 	res.WriteHeader(http.StatusOK)
 	_, err = res.Write(marshaled)
 	if err != nil {
@@ -529,12 +518,11 @@ func (s *Server) Withdraw(res http.ResponseWriter, req *http.Request) {
 		w.Order,
 	).Scan(&acc)
 	if err != nil {
+		s.Logger.Error(err.Error())
 		if errors.Is(err, pgx.ErrNoRows) {
-			s.Logger.Error(err.Error())
 			http.Error(res, `no orders`, http.StatusUnprocessableEntity)
 			return
 		} else {
-			s.Logger.Error(err.Error())
 			http.Error(res, ``, http.StatusInternalServerError)
 			return
 		}
@@ -652,6 +640,7 @@ func (s *Server) Withdrawals(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	res.Header().Add(`Content-Type`, `application/json`)
 	res.WriteHeader(http.StatusOK)
 	_, err = res.Write(marshaled)
 	if err != nil {
@@ -670,7 +659,7 @@ func (s *Server) StartUpdateBackground() {
 
 	for {
 		var sleeper time.Duration
-		sleeper = 10
+		sleeper = 1
 		select {
 		case <-s.StopChan:
 			s.Logger.Debug(`stop background updater`)
@@ -687,11 +676,15 @@ func (s *Server) StartUpdateBackground() {
 		if len(unhandledOrders) == 0 {
 			continue
 		}
+		//err = s.PrepareUnhandledOrders(unhandledOrders)
+		//if err != nil {
+		//	continue
+		//}
 		for _, orderNum := range unhandledOrders {
 			info, err := s.Accrual.GetOrderInfo(orderNum)
 			if err != nil {
-				sleeper = 60
 				s.Logger.Error(err.Error())
+				sleeper = 5
 				continue
 			}
 
@@ -748,7 +741,8 @@ func (s *Server) GetUnhandledOrders() (UnhandledOrders, error) {
 	var unhandledOrders UnhandledOrders
 	rows, err := s.DB.Pool.Query(
 		context.Background(),
-		`select number from public.orders where status in ('NEW', 'PROCESSING')`,
+		//`select number from public.orders where status in ('NEW', 'PROCESSING')`,
+		`update public.orders set status = 'PROCESSING' where status in ('NEW', 'PROCESSING') returning number`,
 	)
 	emptySlice := make([]string, 0)
 	if err != nil {
@@ -765,3 +759,16 @@ func (s *Server) GetUnhandledOrders() (UnhandledOrders, error) {
 
 	return unhandledOrders, nil
 }
+
+//func (s *Server) PrepareUnhandledOrders(o UnhandledOrders) error {
+//	var batch pgx.Batch
+//	for _, v := range o {
+//		batch.Queue(`update public.orders set status = $1 where number = $2`, `PROCESSING`, v)
+//	}
+//	_, err := s.DB.Pool.SendBatch(context.Background(), &batch).Exec()
+//	if err != nil {
+//		return err
+//	}
+//
+//	return nil
+//}

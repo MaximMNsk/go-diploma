@@ -13,6 +13,7 @@ import (
 type Config struct {
 	StartStandalone    string
 	Command            string
+	Mode               string
 	DatabaseConnection string `env:"DATABASE_URI"`
 	MartAddress        string `env:"RUN_ADDRESS"`
 	AccrualAddress     string `env:"ACCRUAL_SYSTEM_ADDRESS"`
@@ -55,7 +56,7 @@ type NewAccrualType struct {
 }
 
 type GetOrderData struct {
-	OrderNum   string      `json:"order"`
+	OrderNum   string      `json:"number"`
 	Status     string      `json:"status"`
 	Accrual    float32     `json:"accrual,omitempty"`
 	UploadedAt interface{} `json:"uploaded_at"`
@@ -75,29 +76,34 @@ func (c *Config) Init() error {
 		return fmt.Errorf(envErr.Error()+` : %w`, ErrEnv)
 	}
 
-	flag.StringVar(&c.MartAddress, "a", "", "address and port to run server mart")
-	flag.StringVar(&c.DatabaseConnection, "d", "", "db connection")
-	flag.StringVar(&c.AccrualAddress, "r", "", "address and port to run accrual server")
+	if c.DatabaseConnection == `` || c.MartAddress == `` || c.AccrualAddress == `` {
+		flag.StringVar(&c.MartAddress, "a", "", "address and port to run server mart")
+		flag.StringVar(&c.DatabaseConnection, "d", "", "db connection")
+		flag.StringVar(&c.AccrualAddress, "r", "", "address and port to run accrual server")
+	}
 	flag.StringVar(&c.StartStandalone, "standalone", "n", "working mode y/n, default n")
+	flag.StringVar(&c.Mode, "mode", "easy", "running mode easy/full, default easy")
 	flag.StringVar(&c.Command, "command", "start", "action command start/stop, default start")
 	flag.Parse()
 
-	pwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	fileConfig, errFile := os.Open(filepath.Join(pwd, `./config.json`))
-	if errFile != nil {
-		return fmt.Errorf(errFile.Error()+` : %w`, ErrFile)
-	}
-	decoder := json.NewDecoder(fileConfig)
-	errDecode := decoder.Decode(&c.LocalConfig)
-	if errDecode != nil {
-		return fmt.Errorf(errDecode.Error()+` : %w`, ErrFile)
-	}
-	err = fileConfig.Close()
-	if err != nil {
-		return err
+	if c.Mode == `full` {
+		pwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		fileConfig, errFile := os.Open(filepath.Join(pwd, `./config.json`))
+		if errFile != nil {
+			return fmt.Errorf(errFile.Error()+` : %w`, ErrFile)
+		}
+		decoder := json.NewDecoder(fileConfig)
+		errDecode := decoder.Decode(&c.LocalConfig)
+		if errDecode != nil {
+			return fmt.Errorf(errDecode.Error()+` : %w`, ErrFile)
+		}
+		err = fileConfig.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	if c.DatabaseConnection == `` || c.MartAddress == `` || c.AccrualAddress == `` {
