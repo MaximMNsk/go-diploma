@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/ShiraazMoollatjie/goluhn"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -293,6 +294,12 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 	}
 
 	orderNum := string(contentBody)
+	err = goluhn.Validate(orderNum)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, `inconsistent body`, http.StatusUnprocessableEntity)
+		return
+	}
 
 	var savedOrderUserID int
 	err = s.DB.Pool.QueryRow(
@@ -394,7 +401,13 @@ func (s *Server) GetOrders(res http.ResponseWriter, req *http.Request) {
 	userID := req.Context().Value(cookie.UserNum(`UserID`)).(int)
 
 	rows, err := s.DB.Pool.Query(req.Context(),
-		`select number, status, accrual, uploaded_at from public.orders where user_id = $1`,
+		`select 
+    			number, 
+    			status, 
+    			round(cast(accrual as numeric), 2) as accrual, 
+    			uploaded_at 
+			from public.orders 
+			where user_id = $1`,
 		userID)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -454,7 +467,10 @@ func (s *Server) GetBalance(res http.ResponseWriter, req *http.Request) {
 	var bal Balance
 	err := s.DB.Pool.QueryRow(
 		req.Context(),
-		`select current_balance, total_withdrawn from public.accruals where user_id = $1`,
+		`select round(cast(current_balance as numeric), 2) as current_balance, 
+       				round(cast(total_withdrawn as numeric), 2) as total_withdrawn 
+			from public.accruals 
+			where user_id = $1`,
 		userID,
 	).Scan(&bal.Balance, &bal.Withdrawn)
 	if err != nil {
@@ -514,7 +530,7 @@ func (s *Server) Withdraw(res http.ResponseWriter, req *http.Request) {
 
 	var acc float32
 	err = s.DB.Pool.QueryRow(req.Context(),
-		`select accrual from public.orders where number = $1`,
+		`select round(cast(accrual as numeric), 2) as accrual from public.orders where number = $1`,
 		w.Order,
 	).Scan(&acc)
 	if err != nil {
@@ -603,7 +619,10 @@ func (s *Server) Withdrawals(res http.ResponseWriter, req *http.Request) {
 
 	rows, err := s.DB.Pool.Query(
 		req.Context(),
-		`select sum, order_number from public.withdrawals where user_id = $1`,
+		`select round(cast(sum as numeric), 2) as sum, 
+       				order_number 
+			from public.withdrawals 
+			where user_id = $1`,
 		userID,
 	)
 	if err != nil {
@@ -738,7 +757,6 @@ func (s *Server) GetUnhandledOrders() (UnhandledOrders, error) {
 	var unhandledOrders UnhandledOrders
 	rows, err := s.DB.Pool.Query(
 		context.Background(),
-		//`select number from public.orders where status in ('NEW', 'PROCESSING')`,
 		`update public.orders set status = 'PROCESSING' where status in ('NEW', 'PROCESSING') returning number`,
 	)
 	emptySlice := make([]string, 0)

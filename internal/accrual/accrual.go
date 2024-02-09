@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go-diploma/server/config"
 	"io"
 	"net/http"
@@ -105,7 +106,7 @@ func (a *Accrual) GetOrderInfo(orderNum string) (config.GetOrderData, error) {
 	}
 
 	if response.StatusCode != http.StatusOK {
-		return config.GetOrderData{}, ErrUnexpectedResponse
+		return config.GetOrderData{}, fmt.Errorf(`Status: `+strconv.Itoa(response.StatusCode)+`: %w`, ErrUnexpectedResponse)
 	}
 
 	var resp config.GetOrderData

@@ -3,9 +3,9 @@ module go-diploma
 go 1.20
 
 require (
+	github.com/ShiraazMoollatjie/goluhn v0.0.0-20211017190329-0d86158c056a
 	github.com/caarlos0/env/v6 v6.10.1
 	github.com/go-chi/chi/v5 v5.0.11
-	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/golang-migrate/migrate/v4 v4.17.0
 	github.com/jackc/pgx/v5 v5.5.2
