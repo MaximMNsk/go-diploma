@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/ShiraazMoollatjie/goluhn"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -307,6 +308,11 @@ func (s *Server) SaveOrder(res http.ResponseWriter, req *http.Request) {
 		`select user_id from public.orders where number = $1`,
 		orderNum,
 	).Scan(&savedOrderUserID)
+
+	fmt.Println(`Errors: `)
+	fmt.Println(err)
+	fmt.Println(userID)
+	fmt.Println(orderNum)
 
 	isSavedOrder := true
 
