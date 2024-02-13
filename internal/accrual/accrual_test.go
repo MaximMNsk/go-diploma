@@ -18,8 +18,6 @@ func TestMain(m *testing.M) {
 	defer Acc.Stop()
 }
 
-func before() {}
-
 func TestAccrual_SetNewAccrualType(t *testing.T) {
 	_ = Conf.Init()
 	Conf.Get()

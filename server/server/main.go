@@ -148,7 +148,13 @@ func (s *Server) UserRegister(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, `inconsistent request`, http.StatusBadRequest)
 		return
 	}
-	user.pwdHash = sha1hash.Hash(user.Password)
+	user.pwdHash, err = sha1hash.Hash(user.Password)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, `inconsistent request`, http.StatusBadRequest)
+		return
+	}
+
 	s.Logger.Debug(user.pwdHash)
 
 	var userID int
@@ -228,7 +234,12 @@ func (s *Server) UserLogin(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, `inconsistent request`, http.StatusBadRequest)
 		return
 	}
-	user.pwdHash = sha1hash.Hash(user.Password)
+	user.pwdHash, err = sha1hash.Hash(user.Password)
+	if err != nil {
+		s.Logger.Error(err.Error())
+		http.Error(res, `inconsistent request`, http.StatusBadRequest)
+		return
+	}
 	s.Logger.Debug(user.pwdHash)
 
 	row := s.DB.Pool.QueryRow(

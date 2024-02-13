@@ -27,6 +27,9 @@ const protocol = `http://`
 var ErrEmptyAddr = errors.New(`host or port not found`)
 
 func ValidateURL(str string) (string, error) {
+	if len(str) == 0 {
+		return ``, errors.New(`empty validate unit`)
+	}
 	if str[0:4] != `http` {
 		str = protocol + str
 	}
