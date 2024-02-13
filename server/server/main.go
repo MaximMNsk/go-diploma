@@ -735,9 +735,8 @@ func (s *Server) StartUpdateBackground() {
 					return err
 				}
 				_, err = tx.Exec(ctx,
-					`update public.accruals set current_balance = current_balance + $1,
-                       where user_id = 
-                                (select user_id from public.orders where number = $2)`,
+					`update public.accruals set current_balance = current_balance + $1
+                       		where user_id = (select user_id from public.orders where number = $2)`,
 					info.Accrual, orderNum)
 				if err != nil {
 					return err
