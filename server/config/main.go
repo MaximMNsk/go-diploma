@@ -77,13 +77,13 @@ func (c *Config) Init() error {
 	}
 
 	if c.DatabaseConnection == `` || c.MartAddress == `` || c.AccrualAddress == `` {
-		flag.StringVar(&c.MartAddress, "a", "", "address and port to run server mart")
+		flag.StringVar(&c.MartAddress, "a", "", "address and port to run server mart app")
 		flag.StringVar(&c.DatabaseConnection, "d", "", "db connection")
 		flag.StringVar(&c.AccrualAddress, "r", "", "address and port to run accrual server")
 	}
 	flag.StringVar(&c.StartStandalone, "standalone", "n", "working mode y/n, default n")
 	flag.StringVar(&c.Mode, "mode", "easy", "running mode easy/full, default easy")
-	flag.StringVar(&c.Command, "command", "start", "action command start/stop, default start")
+	flag.StringVar(&c.Command, "command", "start", "action command start/stop, default start. Use it when -standalone=y")
 	flag.Parse()
 
 	if c.Mode == `full` {
