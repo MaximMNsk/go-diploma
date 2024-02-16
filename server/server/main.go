@@ -541,8 +541,10 @@ func (s *Server) Withdraw(res http.ResponseWriter, req *http.Request) {
 
 	var acc float32
 	err = s.DB.Pool.QueryRow(req.Context(),
-		`select round(cast(accrual as numeric), 2) as accrual from public.orders where number = $1`,
-		w.Order,
+		//`select round(cast(accrual as numeric), 2) as accrual from public.orders where number = $1`,
+		//w.Order,
+		`select round(cast(current_balance as numeric), 2) as accrual from accruals where user_id = $1`,
+		userID,
 	).Scan(&acc)
 	if err != nil {
 		s.Logger.Error(err.Error())
@@ -571,11 +573,11 @@ func (s *Server) Withdraw(res http.ResponseWriter, req *http.Request) {
 	eg := errgroup.Group{}
 
 	eg.Go(func() error {
-		_, err = tx.Exec(req.Context(), `update public.orders set accrual = accrual-$1 where number = $2`,
-			w.Sum, w.Order)
-		if err != nil {
-			return err
-		}
+		//_, err = tx.Exec(req.Context(), `update public.orders set accrual = accrual-$1 where number = $2`,
+		//	w.Sum, w.Order)
+		//if err != nil {
+		//	return err
+		//}
 		_, err = tx.Exec(
 			req.Context(),
 			`insert into public.withdrawals (user_id, sum, order_number)
@@ -587,9 +589,8 @@ func (s *Server) Withdraw(res http.ResponseWriter, req *http.Request) {
 		_, err = tx.Exec(req.Context(),
 			`update public.accruals set current_balance = current_balance-$1,
 	                      total_withdrawn = total_withdrawn+$2
-	                  where user_id =
-	                           (select user_id from public.orders where number = $3)`,
-			w.Sum, w.Sum, w.Order)
+	                  where user_id = $3`,
+			w.Sum, w.Sum, userID)
 		if err != nil {
 			return err
 		}
@@ -680,6 +681,7 @@ func (s *Server) Withdrawals(res http.ResponseWriter, req *http.Request) {
 	s.Logger.Info(`success GetWithdrawals`)
 }
 
+/** TODO make funOut: отсюда порождать горутины, которые будут ходить в accrual с учетом 429 ответа оттуда */
 func (s *Server) StartUpdateBackground() {
 	s.Logger.Info(`start updater`)
 
