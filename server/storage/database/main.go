@@ -2,18 +2,22 @@ package database
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
 )
 
 var (
-	ErrorInit    = errors.New(`database initialization error! `)
-	ErrorMigrate = errors.New(`migrate error! `)
+	//go:embed migrations/*.sql
+	migrationsDir embed.FS
+	ErrorInit     = errors.New(`database initialization error! `)
+	ErrorMigrate  = errors.New(`migrate error! `)
 )
 
 type Database struct {
@@ -47,9 +51,13 @@ func (db *Database) Close() {
 }
 
 func (db *Database) PrepareDB() error {
-	//path := filepath.Join(`file://` + `../../` + `server/storage/migrations`)
-	m, err := migrate.New(
-		`file://`+`../../`+`server/storage/migrations`,
+	d, err := iofs.New(migrationsDir, "migrations")
+	if err != nil {
+		return err
+	}
+	m, err := migrate.NewWithSourceInstance(
+		`iofs`,
+		d,
 		db.DSN,
 	)
 	if err != nil {
